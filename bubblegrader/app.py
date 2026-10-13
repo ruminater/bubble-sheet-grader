@@ -52,9 +52,11 @@ LOGIN_TRIES, LOGIN_WINDOW = 8, 300  # per address, per five minutes
 _tries: dict[str, deque] = defaultdict(deque)
 
 
-def configure(password: str = "", https: bool = False) -> None:
+def configure(password: str = "", https: bool = False, maker_url: str = "") -> None:
     app.config["PASSWORD"] = password
     app.config["SESSION_COOKIE_SECURE"] = https
+    if maker_url:
+        app.jinja_env.globals["maker_url"] = maker_url
 
 
 def _client() -> str:
@@ -129,6 +131,14 @@ def _prune(now: float) -> None:
 
 
 def _pick_key(sheets: list[Sheet]) -> tuple[Sheet | None, list[Sheet], str]:
+    marked = [s for s in sheets if s.key_marked]
+    if marked:
+        key = marked[0]
+        note = "the sheet with ANSWER KEY bubbled" if key.spec else "the sheet with its KEY bubble filled"
+        if len(marked) > 1:
+            others = ", ".join(f"sheet {s.number}" for s in marked[1:])
+            note += f" (sheet {key.number}; {others} also had it bubbled and were graded as students)"
+        return key, [s for s in sheets if s is not key], note
     named = [s for s in sheets if s.name.replace(" ", "").upper() == "KEY"]
     if named:
         key = named[0]
@@ -246,7 +256,7 @@ def results(run):
         order=order,
         stats=g.stats(),
         flagged=flagged,
-        choices=list("ABCDE"),
+        choices=list(g.choices),
     )
 
 
@@ -267,7 +277,7 @@ def sheet_view(run, n):
 def sheet_png(run, n, side):
     g = _get(run)
     sheet = g.key if n == 0 else next((r.sheet for r in g.results if r.sheet.number == n), None)
-    page = sheet and (sheet.side1 if side == 1 else sheet.side2)
+    page = sheet and sheet.pages.get(side)
     if not page:
         abort(404)
     return Response(render_page(page, None if n == 0 else g.key_answers), mimetype="image/png")
@@ -364,13 +374,14 @@ footer { max-width:1100px; margin:0 auto 24px; padding:0 16px; font-size:12px; c
 @media print { header, footer, .actions, .noprint { display:none; } body { background:#fff; } .card { border:0; padding:0; } }
 </style></head>
 <body><header><a href="/">Bubble Sheet Grader</a>
+<a class="noprint" href="{{ maker_url }}" style="font-size:14px;font-weight:400;border:1px solid rgba(255,255,255,.6);border-radius:8px;padding:5px 12px;margin-left:auto;margin-right:12px">Make answer sheets &rarr;</a>
 {% if config.PASSWORD and not locked %}<form method="post" action="/logout" class="signout"><button>Sign out</button></form>{% endif %}
 </header><main>
 {% include body %}
 </main>
 <footer>Independent open-source software (MIT License). Not affiliated with, endorsed by or
-sponsored by Scantron Corporation. Scantron is a registered trademark of Scantron Corporation,
-used here only to name the answer sheet this tool reads.</footer>
+sponsored by Scantron Corporation or Apperson. Scantron and DataLink are trademarks of their
+owners, used here only to name the answer sheets this tool reads.</footer>
 </body></html>"""
 
 LOGIN = """
@@ -390,8 +401,9 @@ LOGIN = """
 UPLOAD = """
 <div class="card">
 <h1>Grade a set of bubble sheets</h1>
-<p class="muted">Scantron form 16485, scanned to PDF. Results are held in memory for {{ run_hours }} hours,
-visible only in this browser, and never saved; download what you want to keep.</p>
+<p class="muted">Upload scanned PDFs of answer sheets made with the <a href="{{ maker_url }}">Bubble Sheet
+Creator</a>, or of Scantron forms 16485 and 882-E and the Apperson DataLink 3000 (#20420). Results are held in memory for {{ run_hours }} hours, visible
+only in this browser, and never saved; download what you want to keep.</p>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 <form method="post" action="/grade" enctype="multipart/form-data">
   <div class="fields">
@@ -401,13 +413,18 @@ visible only in this browser, and never saved; download what you want to keep.</
       <input type="text" name="course" placeholder="e.g. BIOL 1406-010"></label>
   </div>
   <label class="drop"><strong>Answer key</strong>
-    <span class="muted">A PDF of the key sheet. Optional: leave it empty if the key is inside the
-    student file, either named KEY in the name grid or as the first sheet.</span><br><br>
+    <span class="muted">Optional. Leave this empty if the key is in the student pile: a sheet with its
+    key bubble filled (<b>ANSWER KEY</b> on a Creator sheet, <b>KEY</b> on an 882-E, <b>Key</b> on an
+    Apperson) is found wherever it is. Otherwise the grader uses a 16485 named KEY, or the first
+    sheet.</span><br><br>
     <input type="file" name="key" accept="application/pdf">
   </label>
   <label class="drop"><strong>Student sheets</strong>
-    <span class="muted">One or more PDFs. Scan both sides if the test goes past question 120 or
-    you want names read; blank sheets are skipped.</span><br><br>
+    <span class="muted">One or more PDFs from the copier's scan-to-PDF, 150 dpi or more. Pages can be
+    crooked, shrunk or upside down. Scan both sides of a two-page sheet; the grader puts each
+    student's pages back together. Bubbled names and student IDs are read, every kind of question on
+    the sheet is scored (A&ndash;E, A&ndash;J, 1&ndash;5, True/False, Yes/No), and blank sheets are
+    skipped.</span><br><br>
     <input type="file" name="students" accept="application/pdf" multiple>
   </label>
   <button type="submit">Grade</button>
@@ -465,13 +482,14 @@ RESULTS = """
   <p class="muted noprint">Sort by
     <a href="?sort=sheet">sheet order</a> · <a href="?sort=name">name</a> · <a href="?sort=score">score</a></p>
   <div class="scroll"><table>
-    <tr><th class="num">#</th><th>Name</th><th class="num">Score</th><th class="num">%</th><th>Check</th><th>Responses (wrong in lower case, - blank, * multiple)</th></tr>
+    <tr><th class="num">#</th><th>Name</th><th class="num">Score</th><th class="num">%</th>{% if g.has_points %}<th class="num">Subjective</th>{% endif %}<th>Check</th><th>Responses (wrong in lower case, - blank, * multiple)</th></tr>
     {% for r in rows %}
     <tr>
       <td class="num">{{ r.sheet.number }}</td>
       <td><a href="/r/{{ run }}/sheet/{{ r.sheet.number }}">{{ r.label }}</a></td>
       <td class="num">{{ r.score }} / {{ r.possible }}</td>
       <td class="num">{{ '%.1f'|format(r.percent) }}</td>
+      {% if g.has_points %}<td class="num">{{ r.sheet.points if r.sheet.points is not none else '' }}</td>{% endif %}
       <td>{% if r.flags %}<span class="flag">{{ r.flags|length }} to check</span>{% endif %}</td>
       <td class="resp">{% for q in g.questions %}{% set a = r.responses[q] %}{% if q in r.correct %}{{ a }}{% elif a %}{{ a|lower }}{% else %}-{% endif %}{% if loop.index % 10 == 0 %} {% endif %}{% endfor %}</td>
     </tr>
@@ -528,10 +546,10 @@ SHEET = """
     <span style="color:#eb8c00">&#9711; to check</span>
   </p>
   <div class="sheetimgs">
-    {% if sheet.side1 %}<img src="/r/{{ run }}/sheet/{{ n }}/side1.png" alt="Side 1 as read">{% endif %}
-    {% if sheet.side2 %}<img src="/r/{{ run }}/sheet/{{ n }}/side2.png" alt="Side 2 as read">{% endif %}
+    {% for k, p in sheet.pages|dictsort %}<img src="/r/{{ run }}/sheet/{{ n }}/side{{ k }}.png" alt="{{ 'Side' if not sheet.spec else 'Page' }} {{ k }} as read">{% endfor %}
   </div>
-  <p class="muted">From {{ sheet.source }}{% if sheet.side1 %}, page {{ sheet.side1.index + 1 }}{% endif %}{% if sheet.side2 %}{{ ' and' if sheet.side1 else ', page' }} {{ sheet.side2.index + 1 }}{% endif %}.</p>
+  <p class="muted">{{ sheet.form }}{% if sheet.student_id %} · Student ID {{ sheet.student_id }}{% endif %}{% if sheet.version %} · Test version {{ sheet.version }}{% endif %}{% if sheet.points is not none %} · Subjective score bubbled: {{ sheet.points }}{% endif %}.
+  From {{ sheet.source }}, PDF page{{ 's' if sheet.pages|length > 1 }} {% for p in sheet.ordered %}{{ p.index + 1 }}{% if not loop.last %} and {% endif %}{% endfor %}.</p>
 </div>
 """
 
@@ -540,3 +558,6 @@ from jinja2 import DictLoader  # noqa: E402
 
 app.jinja_loader = DictLoader({"login": LOGIN, "upload": UPLOAD, "results": RESULTS, "sheet": SHEET})
 app.jinja_env.globals["run_hours"] = RUN_HOURS
+# Where people make sheets: the Bubble Sheet Creator's own default address on
+# this machine, unless GRADER_MAKER_URL says otherwise (see __main__.py).
+app.jinja_env.globals["maker_url"] = "http://127.0.0.1:8773/"

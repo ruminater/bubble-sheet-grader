@@ -8,6 +8,8 @@ the environment overrides that file:
   GRADER_PASSWORD  required whenever the host is not this machine only
   GRADER_HTTPS     1 when people reach it over https (a Cloudflare Tunnel, say)
   GRADER_BROWSER   0 to skip opening a browser, as the background service does
+  GRADER_MAKER_URL where the page sends people to make sheets
+                     (default: the Bubble Sheet Creator's own address on this machine)
 """
 
 import os
@@ -46,7 +48,8 @@ def main() -> None:
             f"Refusing to serve on {host} without a password of 10+ characters: these pages "
             f"carry student names and scores. Set GRADER_PASSWORD in {ENV_FILE}."
         )
-    configure(password=password, https=s.get("GRADER_HTTPS") == "1")
+    configure(password=password, https=s.get("GRADER_HTTPS") == "1",
+              maker_url=s.get("GRADER_MAKER_URL", ""))
 
     shown = "127.0.0.1" if host in LOOPBACK or host == "0.0.0.0" else host
     print(f"Bubble Sheet Grader on http://{shown}:{port}/"

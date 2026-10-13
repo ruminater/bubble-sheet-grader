@@ -79,7 +79,9 @@ def register(img: np.ndarray) -> Registration:
     side, marks = (1, left) if len(left) >= len(right) else (2, right)
     if len(marks) < 30:
         raise ValueError(
-            f"found only {len(marks)} timing marks; this does not look like a form 16485 page"
+            f"found only {len(marks)} timing marks; this is neither a form 16485 page nor a "
+            "Bubble Sheet Creator sheet with all four corner squares and its code strips, "
+            "nor a Scantron 882-E or Apperson DataLink 3000 with its row of timing marks"
         )
     # Mark 0 is the top one. Missing marks (the one hidden by the grey divider
     # bar, say) are skipped by rounding each mark to its nearest index.

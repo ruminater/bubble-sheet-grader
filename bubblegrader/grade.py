@@ -31,7 +31,11 @@ class Result:
 
     @property
     def label(self) -> str:
-        return self.sheet.name or f"Sheet {self.sheet.number} (no name)"
+        if self.sheet.name:
+            return self.sheet.name
+        if self.sheet.student_id:
+            return f"ID {self.sheet.student_id}"
+        return f"Sheet {self.sheet.number} (no name)"
 
 
 @dataclass
@@ -79,6 +83,7 @@ class Grading:
     title: str = ""
     course: str = ""
     sources: list[str] = field(default_factory=list)
+    choices: str = CHOICES  # the key sheet's bubble labels, in order
     graded_at: datetime = field(default_factory=datetime.now)
 
     @property
@@ -86,9 +91,22 @@ class Grading:
         return self.title or "Test results"
 
     @property
+    def has_ids(self) -> bool:
+        return any(r.sheet.student_id for r in self.results)
+
+    @property
+    def has_points(self) -> bool:
+        """An 882-E carries a subjective score the instructor bubbles; it is reported, not added."""
+        return any(r.sheet.points is not None for r in self.results)
+
+    @property
     def by_name(self) -> list[Result]:
-        """Named students alphabetically, then unnamed sheets in upload order."""
-        return sorted(self.results, key=lambda r: (not r.sheet.name, r.sheet.name.lower(), r.sheet.number))
+        """Named students alphabetically, then those with only an ID, then the rest in upload order."""
+        return sorted(
+            self.results,
+            key=lambda r: (not r.sheet.name, not r.sheet.student_id, r.sheet.name.lower(),
+                           r.sheet.student_id, r.sheet.number),
+        )
 
     def distribution(self) -> list[tuple[str, int]]:
         """Students per ten-point band, lowest band first; 100% joins 90-100."""
@@ -154,12 +172,16 @@ def grade(key: Sheet, students: list[Sheet], skipped: list[str]) -> Grading:
             responses[q] = "*" if a.flag == "multiple" else a.choice
             if responses[q] == key_answers[q]:
                 correct.add(q)
-        if s.side1 is None and any(q <= 120 for q in qs):
-            skipped.append(f"{s.name or f'Sheet {s.number}'}: side 1 was not in the upload.")
-        if s.side2 is None and any(q > 120 for q in qs):
+        skipped.extend(s.missing(qs))
+        if s.form != key.form:
             skipped.append(
-                f"{s.name or f'Sheet {s.number}'}: side 2 was not in the upload; "
-                "questions 121+ scored as blank."
+                f"{_who(s)} is on a different sheet ({s.form}) from the key ({key.form}); "
+                "graded by question number."
+            )
+        if key.version and s.version and s.version != key.version:
+            skipped.append(
+                f"{_who(s)} bubbled test version {s.version}; the key is version {key.version}. "
+                "Graded against that key all the same."
             )
         results.append(Result(s, responses, correct, flags, len(correct), len(qs)))
 
@@ -168,9 +190,10 @@ def grade(key: Sheet, students: list[Sheet], skipped: list[str]) -> Grading:
     upper, lower = ranked[:third], ranked[-third:] if third else []
     items = []
     for q in qs:
-        counts = {c: 0 for c in list(CHOICES) + ["", "*"]}
+        counts = {c: 0 for c in list(key.choices) + ["", "*"]}
         for r in results:
-            counts[r.responses[q]] += 1
+            # A student on another kind of sheet may answer with other labels.
+            counts[r.responses[q]] = counts.get(r.responses[q], 0) + 1
         items.append(
             Item(
                 q,
@@ -183,4 +206,8 @@ def grade(key: Sheet, students: list[Sheet], skipped: list[str]) -> Grading:
                 len(results),
             )
         )
-    return Grading(key, key_answers, warnings, results, items, skipped)
+    return Grading(key, key_answers, warnings, results, items, skipped, choices=key.choices)
+
+
+def _who(s: Sheet) -> str:
+    return s.name or (f"ID {s.student_id}" if s.student_id else f"Sheet {s.number}")

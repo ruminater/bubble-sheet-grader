@@ -1,15 +1,26 @@
-# Bubble Sheet Grader
+# Bubble Sheet Creator & Grader
 
-Grades Scantron® **form 16485** (General Purpose Answer Sheet) from scanned PDFs, for when no
-dedicated reader is to hand. A small local web page: upload the key and the student sheets,
-get scores, an item analysis, a list of marks a person should check, and a CSV.
+Two small local web tools that work together, for when no dedicated answer-sheet reader is to hand:
+
+- **Bubble Sheet Creator** ([`creator/`](creator/)) makes answer sheets you print yourself and
+  copy on any black-and-white copier, in place of buying pre-printed forms: ready-made A–E,
+  True/False and A–J sheets, or your own with up to four sections of different kinds of question
+  (`A-E`, `1-5`, `T/F`, `Y/N`), a bubbled name, a student ID and an ANSWER KEY bubble.
+- **Bubble Sheet Grader** (this folder) grades scanned PDFs of those sheets, and of three printed
+  forms: Scantron® **form 16485** (General Purpose Answer Sheet), Scantron® **form 882-E**, and the
+  Apperson **DataLink 3000** (reorder #20420). Upload the key and the student sheets; get scores,
+  an item analysis, a list of marks a person should check, and Excel, PDF and CSV files.
 
 No LLM, no network. Everything happens in memory on the machine running it; nothing is saved
 to disk and closing the app forgets every upload.
 
-> **Independent open-source project.** This is not an official Scantron product and is not
-> affiliated with, endorsed by or sponsored by Scantron Corporation. See
+> **Independent open-source project.** This is not an official Scantron or Apperson product and
+> is not affiliated with, endorsed by or sponsored by Scantron Corporation or Apperson. See
 > [Trademarks](#trademarks).
+
+The rest of this page is about the grader. The Creator has its own
+[README](creator/README.md); it starts with `python -m bubblesheets` from `creator/` and
+answers on http://127.0.0.1:8773/.
 
 It needs **Python 3.10 or newer** ([python.org](https://www.python.org/downloads/)). It runs
 on macOS, Windows and Linux. The double-click launcher and the background service below are
@@ -62,7 +73,7 @@ One Mac that stays on can run the grader for everyone, who then open it in their
    network without one.
 2. **Start it as a service.** Run `./service/install.sh` from this folder. It starts the grader
    now and at every login, restarts it if it stops, and prints the address to share, such as
-   `http://192.168.1.20:8765/`. `./service/uninstall.sh` undoes it; the log is
+   `http://<this computer's address>:8765/`. `./service/uninstall.sh` undoes it; the log is
    `~/Library/Logs/bubble-sheet-grader.log`. The first time, macOS asks whether Python may accept
    incoming connections: allow it.
 3. **Keep the Mac awake and signed in.** In System Settings, turn on *Prevent automatic
@@ -111,15 +122,35 @@ All four are built in `exports.py` from the same grading, so they always agree w
 ## Scanning
 
 - Scan to PDF at 150 dpi or better, grayscale. The copier's default document scan is fine.
-- Scan **both sides** if the test goes past question 120 or you want names read. Side 1 then
-  side 2 per sheet, which is what a duplex scan produces. Single-sided scans work; students
-  then appear as "Sheet N (no name)" in upload order.
-- The key goes in its own PDF, or anywhere in the student PDF with **KEY** bubbled in the name
-  grid, or as the first sheet. Blank sheets are skipped.
+  Pages may be crooked, upside down or sideways.
+- Scan **every side that has answers or a name**. Side 1 then side 2 per sheet, which is what a
+  duplex scan produces, and the grader puts each sheet's pages back together. On a 16485, side 2
+  holds questions 121-240 and the name; single-sided scans work, and students then appear as
+  "Sheet N (no name)" in upload order.
+- **The key** goes in its own PDF, or anywhere in the student PDF: a Creator sheet, 882-E or
+  Apperson sheet with its KEY bubble filled, a 16485 with **KEY** bubbled in the name grid, or
+  else the first sheet. Blank sheets are skipped.
 
 ## How it reads a sheet
 
-Every bubble on form 16485 sits on a 1/6-inch lattice tied to the black timing marks down one
+**Creator sheets** describe themselves. Strips of black and white cells along the top and bottom
+edges carry the sheet's settings and a checksum, so the grader rebuilds the exact layout from the
+paper alone, with no registry of custom sheets. Four solid corner squares give a perspective fit
+(shift, scale, rotation and keystone), and a timing mark on every row, down both edges, corrects
+the uneven stretch of a roller-fed copier. `bubblegrader/omr_layout.py` is the format and must
+stay identical to `creator/bubblesheets/layout.py`; a test in each fails if they differ. Names,
+the 9-digit student ID and every section's answers are read.
+
+**Scantron 882-E and Apperson DataLink 3000** (`forms.py`) print one timing dash per bubble row
+down one long edge. The grader finds every dash of each form's size, at any quarter turn and
+anywhere on the glass, and the pattern of gaps in the dash track says which form and which side
+it is. 882-E: the KEY bubble, 100 questions over two sides, and the instructor's subjective score
+(shown and in the CSV, not added to the score); it has no bubbled name, so students are listed by
+sheet number and the picture of the scan shows the handwritten name. Apperson: the Key bubble,
+150 questions, the 9-digit student ID and the test version; a student whose version differs from
+the key's is graded against it with a note.
+
+**Form 16485:** every bubble sits on a 1/6-inch lattice tied to the black timing marks down one
 edge (left on side 1, right on side 2). `sheet.py` finds those marks, fits a line through them,
 and so knows the scan's position, scale and skew; each bubble is then addressed as (columns from
 the marks, mark number). The layout constants are in `reader.py`'s docstring.
@@ -137,9 +168,9 @@ draws what was read over the scan, so any doubt can be settled by eye.
 
 ## Not built yet
 
-- The ID number and birth date grids on side 2 are not read.
+- The ID number and birth date grids on 16485's side 2 are not read.
 - One key per run. There are no alternate versions (form A/B) and no multiple correct answers.
-- Other Scantron forms would each need their own layout constants.
+- Other vendors' forms each need a layout in `forms.py`, measured from a blank and a filled scan.
 
 ## Tests
 
@@ -148,22 +179,27 @@ draws what was read over the scan, so any doubt can be settled by eye.
 .venv\Scripts\python -m unittest discover -s tests      # Windows
 ```
 
-`samples/sample-key-and-students.pdf` is made-up data: a blank sheet, a key, and two students,
-one with deliberate double, blank, X'd and half-erased marks. **Real student scans must never
-be committed.** Keep them outside this folder, or in `private/`, which is gitignored.
+Every sample is made-up data. `samples/sample-key-and-students.pdf` (16485) is a blank sheet, a
+key, and two students, one with deliberate double, blank, X'd and half-erased marks.
+`samples/scantron-882e.pdf` and `samples/apperson-20420.pdf` are real scans of those forms filled
+in with made-up answers. `samples/bubblesheet-*.pdf` are Creator sheets filled in and put through a
+copier's faults by code (`creator/bin/make_sample.py`). **Real student scans must never be
+committed.** Keep them outside this folder, or in `private/`, which is gitignored.
 
 To see the output without installing anything, `samples/sample-class-report.pdf` and
 `samples/sample-student-pages.pdf` are what the grader produces from that sample.
 
 ## Trademarks
 
-Scantron® is a registered trademark of Scantron Corporation. The name is used here only to
-identify the answer sheet this software reads (form 16485). This project is independent: it
-is not made, supported, endorsed or sponsored by Scantron Corporation, and no Scantron
-software, artwork or documentation is included. Grading results come from this software
+Scantron® is a registered trademark of Scantron Corporation, and Apperson and DataLink are
+trademarks of Apperson. The names are used here only to identify the answer sheets this
+software reads (forms 16485 and 882-E, and the DataLink 3000 #20420). This project is
+independent: it is not made, supported, endorsed or sponsored by Scantron Corporation or
+Apperson, and includes none of their software or documentation. The sample scans show those
+printed forms, filled in with made-up answers, only so the tests have real pages to read. Grading results come from this software
 alone; check anything that matters by eye.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The license covers this project's code only and grants no rights
+MIT, for the grader and the Creator alike. See [LICENSE](LICENSE). The license covers this project's code only and grants no rights
 in any third-party trademark.

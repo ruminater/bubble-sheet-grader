@@ -46,7 +46,15 @@ GOOD, GOOD_BG = "167A3E", "E3F4E8"
 BAD, BAD_BG = "B3261E", "FBE4E2"
 WARN, WARN_BG = "A15C00", "FFF1D6"
 
-CHOICES = "ABCDE"
+
+
+def _who(r: Result) -> str:
+    """The student as a roster names them: name, else student ID, else sheet number."""
+    if r.sheet.name:
+        return r.sheet.name
+    if r.sheet.student_id:
+        return f"ID {r.sheet.student_id}"
+    return f"(no name, sheet {r.sheet.number})"
 
 
 def filename(g: Grading, ext: str, suffix: str = "") -> str:
@@ -79,12 +87,18 @@ def to_csv(g: Grading) -> str:
     buf.write("﻿")
     w = csv.writer(buf)
     qs = g.questions
-    w.writerow(["Name", "Sheet", "Score", "Possible", "Percent", "Marks to check"] + [f"Q{q}" for q in qs])
-    w.writerow(["ANSWER KEY", "", "", "", "", ""] + [g.key_answers[q] for q in qs])
+    ids, pts = g.has_ids, g.has_points
+    w.writerow(["Name"] + (["Student ID"] if ids else [])
+               + ["Sheet", "Score", "Possible", "Percent", "Marks to check"]
+               + (["Subjective points"] if pts else []) + [f"Q{q}" for q in qs])
+    w.writerow(["ANSWER KEY"] + ([""] if ids else []) + ["", "", "", "", ""] + ([""] if pts else [])
+               + [g.key_answers[q] for q in qs])
     for r in g.by_name:
         w.writerow(
-            [r.sheet.name or f"(no name, sheet {r.sheet.number})", r.sheet.number, r.score,
-             r.possible, f"{r.percent:.1f}", len(r.flags)]
+            [r.sheet.name or ("" if r.sheet.student_id else f"(no name, sheet {r.sheet.number})")]
+            + ([r.sheet.student_id] if ids else [])
+            + [r.sheet.number, r.score, r.possible, f"{r.percent:.1f}", len(r.flags)]
+            + ([r.sheet.points if r.sheet.points is not None else ""] if pts else [])
             + [{"": "", "*": "*"}.get(r.responses[q], r.responses[q]) for q in qs]
         )
     return buf.getvalue()
@@ -219,11 +233,11 @@ def _xlsx_summary(ws, g: Grading):
 
 def _xlsx_scores(ws, g: Grading):
     _title(ws, g, "Scores")
-    _header(ws, 4, ["Name", "Sheet", "Score", "Possible", "Percent", "Marks to check"],
-            [30, 8, 9, 10, 12, 16])
+    _header(ws, 4, ["Name", "Sheet", "Score", "Possible", "Percent", "Marks to check"]
+            + (["Student ID"] if g.has_ids else []), [30, 8, 9, 10, 12, 16, 14])
     rows = g.by_name
     for i, r in enumerate(rows, 5):
-        vals = [r.sheet.name or f"(no name, sheet {r.sheet.number})", r.sheet.number, r.score,
+        vals = [_who(r), r.sheet.number, r.score,
                 r.possible, r.percent / 100, len(r.flags) or None]
         for c, v in enumerate(vals, 1):
             cell = ws.cell(row=i, column=c, value=v)
@@ -231,16 +245,18 @@ def _xlsx_scores(ws, g: Grading):
         ws.cell(row=i, column=5).number_format = "0.0%"
         if r.flags:
             ws.cell(row=i, column=6).font = Font(bold=True, color=WARN)
+        if g.has_ids:
+            ws.cell(row=i, column=7, value=r.sheet.student_id or None).alignment = _CENTER
         if not r.sheet.name:
             ws.cell(row=i, column=1).font = Font(italic=True, color=MUTED)
     last = 4 + len(rows)
-    _zebra(ws, 5, last, 6)
+    _zebra(ws, 5, last, 7 if g.has_ids else 6)
     if rows:
         ws.conditional_formatting.add(
             f"E5:E{last}",
             DataBarRule(start_type="num", start_value=0, end_type="num", end_value=1, color="B39DDB"),
         )
-        ws.auto_filter.ref = f"A4:F{last}"
+        ws.auto_filter.ref = f"A4:{'G' if g.has_ids else 'F'}{last}"
     ws.freeze_panes = "B5"
     _print_setup(ws, 4)
 
@@ -257,7 +273,7 @@ def _xlsx_responses(ws, g: Grading):
     ws.cell(row=key_row, column=1).fill = ws.cell(row=key_row, column=2).fill = _fill(PURPLE_LIGHT)
     good, bad, warn = _fill(GOOD_BG), _fill(BAD_BG), _fill(WARN_BG)
     for i, r in enumerate(g.by_name, key_row + 1):
-        ws.cell(row=i, column=1, value=r.sheet.name or f"(no name, sheet {r.sheet.number})")
+        ws.cell(row=i, column=1, value=_who(r))
         sc = ws.cell(row=i, column=2, value=f"{r.score}/{r.possible}")
         sc.alignment = _CENTER
         for j, q in enumerate(qs, 3):
@@ -278,21 +294,23 @@ def _xlsx_responses(ws, g: Grading):
 
 def _xlsx_items(ws, g: Grading):
     _title(ws, g, "Item analysis")
-    labels = ["Question", "Key", "% Correct"] + list(CHOICES) + ["Blank", "Multiple", "Discrimination", "Worth a look"]
-    _header(ws, 4, labels, [10, 7, 11, 6, 6, 6, 6, 6, 8, 10, 15, 46])
+    ch = g.choices
+    labels = ["Question", "Key", "% Correct"] + list(ch) + ["Blank", "Multiple", "Discrimination", "Worth a look"]
+    _header(ws, 4, labels, [10, 7, 11] + [6] * len(ch) + [8, 10, 15, 46])
+    disc, note = 3 + len(ch) + 3, 3 + len(ch) + 4
     for i, it in enumerate(g.items, 5):
-        vals = [it.question, it.key, it.percent / 100] + [it.counts[c] or None for c in CHOICES] + [
+        vals = [it.question, it.key, it.percent / 100] + [it.counts[c] or None for c in ch] + [
             it.counts[""] or None, it.counts["*"] or None, it.discrimination, it.note or None]
         for c, v in enumerate(vals, 1):
             cell = ws.cell(row=i, column=c, value=v)
             cell.alignment = _LEFT if c == len(vals) else _CENTER
         ws.cell(row=i, column=3).number_format = "0%"
-        ws.cell(row=i, column=11).number_format = "0.00"
-        key_col = 4 + CHOICES.index(it.key)
-        ws.cell(row=i, column=key_col).font = Font(bold=True, color=GOOD)
+        ws.cell(row=i, column=disc).number_format = "0.00"
+        if it.key in ch:
+            ws.cell(row=i, column=4 + ch.index(it.key)).font = Font(bold=True, color=GOOD)
         ws.cell(row=i, column=2).font = Font(bold=True, color=PURPLE)
         if it.note:
-            ws.cell(row=i, column=12).font = Font(color=BAD if it.discrimination is not None and it.discrimination < 0 else WARN)
+            ws.cell(row=i, column=note).font = Font(color=BAD if it.discrimination is not None and it.discrimination < 0 else WARN)
     last = 4 + len(g.items)
     _zebra(ws, 5, last, len(labels))
     if g.items:
@@ -302,7 +320,7 @@ def _xlsx_items(ws, g: Grading):
                            mid_type="num", mid_value=0.6, mid_color="FFF1D6",
                            end_type="num", end_value=1, end_color="BFE5C9"),
         )
-        ws.auto_filter.ref = f"A4:L{last}"
+        ws.auto_filter.ref = f"A4:{get_column_letter(note)}{last}"
     ws.freeze_panes = "B5"
     r = last + 2
     for line in (
@@ -325,7 +343,7 @@ def _xlsx_checks(ws, g: Grading):
     }
     rows = [(r, q, f) for r in g.by_name for q, f in sorted(r.flags.items())]
     for i, (r, q, f) in enumerate(rows, 5):
-        vals = [r.sheet.name or f"(no name, sheet {r.sheet.number})", r.sheet.number, q,
+        vals = [_who(r), r.sheet.number, q,
                 f.capitalize(), _response(r, q), g.key_answers[q], meaning[f]]
         for c, v in enumerate(vals, 1):
             cell = ws.cell(row=i, column=c, value=v)
@@ -497,7 +515,7 @@ def to_pdf_report(g: Grading) -> bytes:
     story += [PageBreak(), Paragraph("Scores", _H2)]
     rows = [["Name", "Sheet", "Score", "Percent", "", "To check"]]
     for r in g.by_name:
-        name = Paragraph(_esc(r.sheet.name) if r.sheet.name else f"<i><font color='#{MUTED}'>No name (sheet {r.sheet.number})</font></i>", _CELL)
+        name = Paragraph(_esc(r.label) if r.sheet.name or r.sheet.student_id else f"<i><font color='#{MUTED}'>No name (sheet {r.sheet.number})</font></i>", _CELL)
         rows.append([name, str(r.sheet.number), f"{r.score} / {r.possible}", f"{r.percent:.1f}%",
                      _bar(r.percent), str(len(r.flags)) if r.flags else ""])
     t = Table(rows, colWidths=[W * 0.36, W * 0.08, W * 0.12, W * 0.11, W * 0.21, W * 0.12], repeatRows=1)
@@ -531,22 +549,23 @@ def to_pdf_report(g: Grading) -> bytes:
         "How many students chose each answer. The key's column is shaded. <b>Discrimination</b> is the "
         "share correct in the top third by score minus the bottom third: 0.3 or more is good, below 0 "
         "usually means a wrong key or a misleading question.", _SMALL), Spacer(1, 6)]
-    head = ["Q", "Key", "% correct"] + list(CHOICES) + ["Blank", "Multi", "Discrim.", "Worth a look"]
+    ch = g.choices
+    head = ["Q", "Key", "% correct"] + list(ch) + ["Blank", "Multi", "Discrim.", "Worth a look"]
     rows = [head]
     st = _table_style() + [("ALIGN", (0, 0), (-2, -1), "CENTER")]
     for i, it in enumerate(g.items, 1):
         d = it.discrimination
         rows.append([str(it.question), it.key, f"{it.percent:.0f}%"]
-                    + [str(it.counts[c]) if it.counts[c] else "" for c in CHOICES]
+                    + [str(it.counts[c]) if it.counts[c] else "" for c in ch]
                     + [str(it.counts[""] or ""), str(it.counts["*"] or ""),
                        "" if d is None else f"{d:.2f}", Paragraph(it.note, _SMALL) if it.note else ""])
-        k = 3 + CHOICES.index(it.key)
+        k = 3 + ch.index(it.key) if it.key in ch else 1
         st += [("BACKGROUND", (k, i), (k, i), _c(GOOD_BG)), ("TEXTCOLOR", (k, i), (k, i), _c(GOOD)),
                ("FONTNAME", (k, i), (k, i), "Helvetica-Bold"), ("FONTNAME", (1, i), (1, i), "Helvetica-Bold"),
                ("TEXTCOLOR", (2, i), (2, i), _c(GOOD if it.percent >= 70 else WARN if it.percent >= 40 else BAD))]
         if d is not None and d < 0:
-            st.append(("TEXTCOLOR", (10, i), (10, i), _c(BAD)))
-    widths = [0.06, 0.06, 0.09] + [0.055] * 5 + [0.065, 0.065, 0.08] + [0.0]
+            st.append(("TEXTCOLOR", (5 + len(ch), i), (5 + len(ch), i), _c(BAD)))
+    widths = [0.06, 0.06, 0.09] + [min(0.055, 0.33 / len(ch))] * len(ch) + [0.065, 0.065, 0.08] + [0.0]
     widths[-1] = 1 - sum(widths)
     t = Table(rows, colWidths=[W * x for x in widths], repeatRows=1)
     t.setStyle(TableStyle(st))
@@ -570,7 +589,7 @@ def to_pdf_students(g: Grading) -> bytes:
         if n:
             story.append(PageBreak())
         story += [
-            Paragraph(_esc(r.sheet.name) if r.sheet.name else f"No name (sheet {r.sheet.number})", _H1),
+            Paragraph(_esc(r.label) if r.sheet.name or r.sheet.student_id else f"No name (sheet {r.sheet.number})", _H1),
             Paragraph(" · ".join(x for x in (g.heading, g.course, _day(g.graded_at)) if x), _SUB),
             _tiles([("Score", f"{r.score} / {r.possible}"), ("Percent", f"{r.percent:.1f}%"),
                     ("Class mean", f"{mean:.1f}%"), ("Missed", str(r.possible - r.score))], W),
