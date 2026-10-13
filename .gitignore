@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+# Real student scans never belong in git. Put them anywhere outside this folder,
+# or in private/, which is ignored.
+private/
+# This machine's settings, including the shared password.
+scantron.env
+data/
