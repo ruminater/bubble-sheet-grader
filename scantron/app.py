@@ -360,13 +360,18 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .dl span.note { display:block; font-size:13px; color:var(--muted); margin-top:2px; }
 .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
 .scroll { overflow-x:auto; }
-@media print { header, .actions, .noprint { display:none; } body { background:#fff; } .card { border:0; padding:0; } }
+footer { max-width:1100px; margin:0 auto 24px; padding:0 16px; font-size:12px; color:var(--muted); }
+@media print { header, footer, .actions, .noprint { display:none; } body { background:#fff; } .card { border:0; padding:0; } }
 </style></head>
 <body><header><a href="/">Scantron Grader</a>
 {% if config.PASSWORD and not locked %}<form method="post" action="/logout" class="signout"><button>Sign out</button></form>{% endif %}
 </header><main>
 {% include body %}
-</main></body></html>"""
+</main>
+<footer>Independent open-source software (MIT License). Not affiliated with, endorsed by or
+sponsored by Scantron Corporation. Scantron is a registered trademark of Scantron Corporation,
+used here only to name the answer sheet this tool reads.</footer>
+</body></html>"""
 
 LOGIN = """
 <div class="card" style="max-width:420px;margin:60px auto">

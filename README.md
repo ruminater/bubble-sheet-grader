@@ -7,6 +7,10 @@ get scores, an item analysis, a list of marks a person should check, and a CSV.
 No LLM, no network. Everything happens in memory on the machine running it; nothing is saved
 to disk and closing the app forgets every upload.
 
+> **Independent open-source project.** This is not an official Scantron product and is not
+> affiliated with, endorsed by or sponsored by Scantron Corporation. See
+> [Trademarks](#trademarks).
+
 It needs **Python 3.10 or newer** ([python.org](https://www.python.org/downloads/)). It runs
 on macOS, Windows and Linux. The double-click launcher and the background service below are
 macOS only; everywhere else, start it with `python -m scantron` as shown.
@@ -148,6 +152,15 @@ draws what was read over the scan, so any doubt can be settled by eye.
 one with deliberate double, blank, X'd and half-erased marks. **Real student scans must never
 be committed.** Keep them outside this folder, or in `private/`, which is gitignored.
 
+## Trademarks
+
+Scantron® is a registered trademark of Scantron Corporation. The name is used here only to
+identify the answer sheet this software reads (form 16485). This project is independent: it
+is not made, supported, endorsed or sponsored by Scantron Corporation, and no Scantron
+software, artwork or documentation is included. Grading results come from this software
+alone; check anything that matters by eye.
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). The license covers this project's code only and grants no rights
+in any third-party trademark.
