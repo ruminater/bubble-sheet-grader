@@ -1,16 +1,16 @@
 #!/bin/bash
 # Run the grader in the background on this Mac, from login, restarting if it
-# stops. Run once from the scantron folder:  ./service/install.sh
+# stops. Run once from the grader's folder:  ./service/install.sh
 # Undo with ./service/uninstall.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DIR="$(pwd)"
-LABEL=local.scantron-grader
+LABEL=local.bubble-sheet-grader
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-LOG="$HOME/Library/Logs/scantron.log"
+LOG="$HOME/Library/Logs/bubble-sheet-grader.log"
 
-if [ ! -f scantron.env ]; then
-  echo "No scantron.env yet. Copy scantron.env.example to scantron.env and set a password first."
+if [ ! -f grader.env ]; then
+  echo "No grader.env yet. Copy grader.env.example to grader.env and set a password first."
   exit 1
 fi
 if [ ! -x .venv/bin/python ]; then
@@ -26,10 +26,10 @@ cat > "$PLIST" <<PLIST
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array>
-    <string>$DIR/.venv/bin/python</string><string>-m</string><string>scantron</string>
+    <string>$DIR/.venv/bin/python</string><string>-m</string><string>bubblegrader</string>
   </array>
   <key>WorkingDirectory</key><string>$DIR</string>
-  <key>EnvironmentVariables</key><dict><key>SCANTRON_BROWSER</key><string>0</string></dict>
+  <key>EnvironmentVariables</key><dict><key>GRADER_BROWSER</key><string>0</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
@@ -41,7 +41,7 @@ PLIST
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 sleep 3
-PORT=$(grep -E '^SCANTRON_PORT=' scantron.env | cut -d= -f2 || true); PORT=${PORT:-8765}
+PORT=$(grep -E '^GRADER_PORT=' grader.env | cut -d= -f2 || true); PORT=${PORT:-8765}
 if curl -s -o /dev/null "http://127.0.0.1:$PORT/login"; then
   IP=$(ipconfig getifaddr en0 || ipconfig getifaddr en1 || echo "this-mac's-address")
   echo "Running. Others on the network can use: http://$IP:$PORT/"

@@ -1,6 +1,6 @@
-# Scantron Grader
+# Bubble Sheet Grader
 
-Grades Scantron **form 16485** (General Purpose Answer Sheet) from scanned PDFs, for when no
+Grades Scantron® **form 16485** (General Purpose Answer Sheet) from scanned PDFs, for when no
 dedicated reader is to hand. A small local web page: upload the key and the student sheets,
 get scores, an item analysis, a list of marks a person should check, and a CSV.
 
@@ -13,20 +13,20 @@ to disk and closing the app forgets every upload.
 
 It needs **Python 3.10 or newer** ([python.org](https://www.python.org/downloads/)). It runs
 on macOS, Windows and Linux. The double-click launcher and the background service below are
-macOS only; everywhere else, start it with `python -m scantron` as shown.
+macOS only; everywhere else, start it with `python -m bubblegrader` as shown.
 
 ## Running it
 
 ### macOS
 
-Double-click **`Scantron Grader.command`** in Finder. The first run creates `.venv/` and
+Double-click **`Bubble Sheet Grader.command`** in Finder. The first run creates `.venv/` and
 installs the packages it needs; after that it starts in seconds and opens
 http://127.0.0.1:8765/. If macOS says the file is from an unidentified developer, right-click
 it, choose **Open**, then **Open** again. From a terminal the same thing is:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once
-.venv/bin/python -m scantron
+.venv/bin/python -m bubblegrader
 ```
 
 ### Windows
@@ -36,7 +36,7 @@ In PowerShell or Command Prompt, from this folder:
 ```powershell
 py -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt   # once
-.venv\Scripts\python -m scantron
+.venv\Scripts\python -m bubblegrader
 ```
 
 Your browser opens http://127.0.0.1:8765/. Leave the window open while you use the grader and
@@ -48,7 +48,7 @@ place.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once
-.venv/bin/python -m scantron
+.venv/bin/python -m bubblegrader
 ```
 
 To move it to another computer, copy this folder without `.venv/` and set it up again there.
@@ -57,20 +57,20 @@ To move it to another computer, copy this folder without `.venv/` and set it up 
 
 One Mac that stays on can run the grader for everyone, who then open it in their own browser.
 
-1. **Set it up.** Put this folder on that Mac, copy `scantron.env.example` to `scantron.env`,
-   and set `SCANTRON_PASSWORD` to something of 10+ characters. The grader refuses to go on the
+1. **Set it up.** Put this folder on that Mac, copy `grader.env.example` to `grader.env`,
+   and set `GRADER_PASSWORD` to something of 10+ characters. The grader refuses to go on the
    network without one.
 2. **Start it as a service.** Run `./service/install.sh` from this folder. It starts the grader
    now and at every login, restarts it if it stops, and prints the address to share, such as
    `http://192.168.1.20:8765/`. `./service/uninstall.sh` undoes it; the log is
-   `~/Library/Logs/scantron.log`. The first time, macOS asks whether Python may accept
+   `~/Library/Logs/bubble-sheet-grader.log`. The first time, macOS asks whether Python may accept
    incoming connections: allow it.
 3. **Keep the Mac awake and signed in.** In System Settings, turn on *Prevent automatic
    sleeping* (Energy) and *Automatically log in* (Users & Groups), so it comes back after a
    power cut.
 
-On Windows or Linux, the same settings in `scantron.env` (`SCANTRON_HOST=0.0.0.0` and a
-password) put it on the network when started with `python -m scantron`; keeping it running is
+On Windows or Linux, the same settings in `grader.env` (`GRADER_HOST=0.0.0.0` and a
+password) put it on the network when started with `python -m bubblegrader`; keeping it running is
 up to you.
 
 What colleagues get: one shared password; results visible only in the browser that uploaded
@@ -84,7 +84,7 @@ network unencrypted. Options, best first:
 - **Cloudflare Tunnel with Cloudflare Access**, at an address on a domain you control.
   It gives https, works on and off site, opens no ports on the host, and Access can
   restrict sign-in to named email addresses before anyone sees the password page. Set
-  `SCANTRON_HTTPS=1`. The tunnel runs as `cloudflared` on the host; the Access policy is a
+  `GRADER_HTTPS=1`. The tunnel runs as `cloudflared` on the host; the Access policy is a
   dashboard step.
 - **Tailscale** on the host and on each colleague's machine: encrypted, but everyone installs it.
 - **Local network only, over http**: works today, with the exposure above. Only if your IT

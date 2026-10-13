@@ -12,10 +12,10 @@ import io
 import openpyxl
 import pymupdf
 
-from scantron import exports
-from scantron.app import app
-from scantron.grade import grade
-from scantron.reader import read_pdf
+from bubblegrader import exports
+from bubblegrader.app import app
+from bubblegrader.grade import grade
+from bubblegrader.reader import read_pdf
 
 SAMPLE = pathlib.Path(__file__).parent.parent / "samples" / "sample-key-and-students.pdf"
 

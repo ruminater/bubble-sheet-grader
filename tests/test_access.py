@@ -3,8 +3,8 @@
 import pathlib
 import unittest
 
-from scantron import app as appmod
-from scantron.app import app, configure
+from bubblegrader import app as appmod
+from bubblegrader.app import app, configure
 
 SAMPLE = pathlib.Path(__file__).parent.parent / "samples" / "sample-key-and-students.pdf"
 PASSWORD = "correct horse battery"

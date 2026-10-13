@@ -5,5 +5,5 @@ __pycache__/
 # or in private/, which is ignored.
 private/
 # This machine's settings, including the shared password.
-scantron.env
+grader.env
 data/

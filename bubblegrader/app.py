@@ -4,7 +4,7 @@ Everything stays in this process's memory. Nothing is written to disk, and a
 run is forgotten after RUN_HOURS or when the app stops.
 
 Run on one machine for its own user, it needs no login. Shared on a network,
-it takes one password for everyone (SCANTRON_PASSWORD), and each run is
+it takes one password for everyone (GRADER_PASSWORD), and each run is
 visible only to the browser session that uploaded it: colleagues share the
 tool, not each other's students.
 """
@@ -298,7 +298,7 @@ def download(run, kind):
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scantron Grader</title>
+<title>Bubble Sheet Grader</title>
 <style>
 :root { --ink:#1d2330; --muted:#5d6675; --line:#dfe3ea; --bg:#f6f7f9; --card:#fff;
         --accent:#4f2d7f; --good:#167a3e; --bad:#b3261e; --warn:#a15c00; --warnbg:#fff4e0; }
@@ -363,7 +363,7 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 footer { max-width:1100px; margin:0 auto 24px; padding:0 16px; font-size:12px; color:var(--muted); }
 @media print { header, footer, .actions, .noprint { display:none; } body { background:#fff; } .card { border:0; padding:0; } }
 </style></head>
-<body><header><a href="/">Scantron Grader</a>
+<body><header><a href="/">Bubble Sheet Grader</a>
 {% if config.PASSWORD and not locked %}<form method="post" action="/logout" class="signout"><button>Sign out</button></form>{% endif %}
 </header><main>
 {% include body %}

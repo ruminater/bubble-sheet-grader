@@ -50,13 +50,19 @@ CHOICES = "ABCDE"
 
 
 def filename(g: Grading, ext: str, suffix: str = "") -> str:
-    base = " ".join(x for x in (g.course, g.title) if x) or "scantron results"
-    base = re.sub(r"[^A-Za-z0-9 _.-]+", "", base).strip() or "scantron results"
+    base = " ".join(x for x in (g.course, g.title) if x) or "bubble sheet results"
+    base = re.sub(r"[^A-Za-z0-9 _.-]+", "", base).strip() or "bubble sheet results"
     return f"{base}{suffix} {g.graded_at:%Y-%m-%d}.{ext}"
 
 
+def _day(d, month: str = "%B") -> str:
+    # Built by hand: strftime's %-d (no leading zero) is not supported on Windows.
+    return f"{d.strftime(month)} {d.day}, {d.year}"
+
+
 def _stamp(g: Grading) -> str:
-    return g.graded_at.strftime("%B %-d, %Y at %-I:%M %p")
+    d = g.graded_at
+    return f"{_day(d)} at {d.hour % 12 or 12}:{d:%M %p}"
 
 
 def _response(r: Result, q: int) -> str:
@@ -391,7 +397,7 @@ def _doc(buf, g: Grading, what: str, count_pages: bool = True):
         pass
 
     C.count_pages = count_pages
-    C.header = " · ".join(x for x in (g.heading, g.course, what, g.graded_at.strftime("%b %-d, %Y")) if x
+    C.header = " · ".join(x for x in (g.heading, g.course, what, _day(g.graded_at, "%b")) if x
     )
 
     return doc, C
@@ -565,7 +571,7 @@ def to_pdf_students(g: Grading) -> bytes:
             story.append(PageBreak())
         story += [
             Paragraph(_esc(r.sheet.name) if r.sheet.name else f"No name (sheet {r.sheet.number})", _H1),
-            Paragraph(" · ".join(x for x in (g.heading, g.course, g.graded_at.strftime("%B %-d, %Y")) if x), _SUB),
+            Paragraph(" · ".join(x for x in (g.heading, g.course, _day(g.graded_at)) if x), _SUB),
             _tiles([("Score", f"{r.score} / {r.possible}"), ("Percent", f"{r.percent:.1f}%"),
                     ("Class mean", f"{mean:.1f}%"), ("Missed", str(r.possible - r.score))], W),
             Spacer(1, 12),
