@@ -152,6 +152,9 @@ draws what was read over the scan, so any doubt can be settled by eye.
 one with deliberate double, blank, X'd and half-erased marks. **Real student scans must never
 be committed.** Keep them outside this folder, or in `private/`, which is gitignored.
 
+To see the output without installing anything, `samples/sample-class-report.pdf` and
+`samples/sample-student-pages.pdf` are what the grader produces from that sample.
+
 ## Trademarks
 
 Scantron® is a registered trademark of Scantron Corporation. The name is used here only to
